@@ -25,7 +25,6 @@ public class FlinkKafkaConsumer {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 
 		DataStream<String> stream = env.addSource(new FlinkKafkaConsumer010<>(props.getProperty("CLOUDKARAFKA_TOPIC").trim(), new SimpleStringSchema(), props));
-		stream.print();
 		
 //		AllWindowFunction<String, String, TimeWindow> function = new AllWindowFunction<String, String, TimeWindow>() {
 //
