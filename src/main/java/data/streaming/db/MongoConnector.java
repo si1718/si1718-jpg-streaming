@@ -92,20 +92,34 @@ public class MongoConnector {
 		return true;
 	}
 	
-	public static boolean saveReport(KeywordDTO keyword) throws JsonProcessingException {
+	public static boolean saveReport(KeywordDTO keyword, boolean byMonth) throws JsonProcessingException {
 		openReportsConnection();
 		LocalDate date = keyword.getTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 		Integer year = date.getYear();
-		Integer dayOf = date.getDayOfYear();
+		Integer dayOf;
+		if(byMonth) {
+			dayOf = date.getMonthValue();
+		} else {
+			dayOf = date.getDayOfYear();
+		}
+		
 		ObjectMapper mapper = new ObjectMapper();
 		String json = mapper.writeValueAsString(keyword);
 		Document doc = Document.parse(json);
-		doc.append("report_type", "tweet");
+		if(byMonth) {
+			doc.append("report_type", "tweetMonth");
+		} else {
+			doc.append("report_type", "tweet");
+		}
 		doc.append("report_year", year);
 		doc.append("report_day", dayOf);
-		KeywordDTO existing = getKeywordReport(keyword.getKeyword(), keyword.getTime());
+		KeywordDTO existing = getKeywordReport(keyword.getKeyword(), keyword.getTime(), byMonth);
 		if(existing != null) {
-			reportsCollection.replaceOne(getFilterForKeyword(keyword), doc);
+			if(keyword.getStatistic() >= existing.getStatistic()) {
+				reportsCollection.replaceOne(getFilterForKeyword(keyword, byMonth), doc);
+			} else {
+				System.out.println("New report is lower than older, maybe tweet data was deleted. New one is ignored.");
+			}
 		} else {
 			reportsCollection.insertOne(doc);
 		}
@@ -171,10 +185,10 @@ public class MongoConnector {
 		return keywords;
 	}
 	
-	public static KeywordDTO getKeywordReport(String keyword, Date time) {
+	public static KeywordDTO getKeywordReport(String keyword, Date time, boolean byMonth) {
 		openReportsConnection();
 		KeywordDTO key = new KeywordDTO(keyword, time, 0D);
-		FindIterable<Document> result = reportsCollection.find(getFilterForKeyword(key));
+		FindIterable<Document> result = reportsCollection.find(getFilterForKeyword(key, byMonth));
 		if(result != null && result.first() != null) {
 			Document doc = result.first();
 			ObjectMapper mapper = new ObjectMapper();
@@ -219,12 +233,17 @@ public class MongoConnector {
 		return filterAnd;
 	}
 	
-	private static Bson getFilterForKeyword(KeywordDTO key) {
+	private static Bson getFilterForKeyword(KeywordDTO key, boolean byMonth) {
 		LocalDate date = key.getTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 		Integer year = date.getYear();
 		Integer dayOf = date.getDayOfYear();
 		Bson filterKey = Filters.eq("keyword", key.getKeyword());
-		Bson filterType = Filters.eq("report_type", "tweet");
+		Bson filterType;
+		if(byMonth) {
+			filterType = Filters.eq("report_type", "tweetMonth");
+		} else {
+			filterType = Filters.eq("report_type", "tweet");
+		}
 		Bson filterYear = Filters.eq("report_year", year);
 		Bson filterDay = Filters.eq("report_day", dayOf);
 		Bson filterAnd = Filters.and(filterKey, filterType, filterYear, filterDay);

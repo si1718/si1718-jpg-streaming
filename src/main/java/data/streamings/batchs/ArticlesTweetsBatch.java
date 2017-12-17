@@ -53,10 +53,16 @@ public class ArticlesTweetsBatch implements Runnable{
 		}
 	}
 	
-	public static KeywordDTO getKeywordDTOFromMap(String keyword, Date createdAt, Map<Integer, Map<Integer, Map<String, KeywordDTO>>> map) {
+	public static KeywordDTO getKeywordDTOFromMap(String keyword, Date createdAt, boolean byMonth, Map<Integer, Map<Integer, Map<String, KeywordDTO>>> map) {
 		LocalDate date = createdAt.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 		Integer year = date.getYear();
-		Integer dayOf = date.getDayOfYear();
+		Integer dayOf;
+		if(byMonth) {
+			dayOf = date.getMonthValue();
+		} else {
+			dayOf = date.getDayOfYear();
+		}
+		
 		Map<Integer, Map<String, KeywordDTO>> mapYear = map.get(year);
 		if (mapYear == null) {
 			mapYear = new HashMap<>();
@@ -78,10 +84,16 @@ public class ArticlesTweetsBatch implements Runnable{
 		return keywordDTO;
 	}
 	
-	public static void setKeywordDTOToMap(KeywordDTO keyword, Map<Integer, Map<Integer, Map<String, KeywordDTO>>> map) {
+	public static void setKeywordDTOToMap(KeywordDTO keyword, boolean byMonth, Map<Integer, Map<Integer, Map<String, KeywordDTO>>> map) {
 		LocalDate date = keyword.getTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 		Integer year = date.getYear();
-		Integer dayOf = date.getDayOfYear();
+		Integer dayOf;
+		if(byMonth) {
+			dayOf = date.getMonthValue();
+		} else {
+			dayOf = date.getDayOfYear();
+		}
+		
 		Map<Integer, Map<String, KeywordDTO>> mapYear = map.get(year);
 		if (mapYear == null) {
 			mapYear = new HashMap<>();
@@ -99,7 +111,8 @@ public class ArticlesTweetsBatch implements Runnable{
 	
 	public void calculateTweetsStats() {
 		Set<String> keywords = MongoConnector.getArticlesKeywords();
-		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> allStatics = new HashMap<>();		
+		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> allStatics = new HashMap<>();
+		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> monthStatics = new HashMap<>();
 		Iterable<Document> result = MongoConnector.getAlltweets();
 		
 		for (Document doc:result) {
@@ -111,9 +124,12 @@ public class ArticlesTweetsBatch implements Runnable{
 				for(String keyword:keywords){
 					if(tweet.contains(keyword)) {
 						Date createdAt = Utils.formatTwitterDate((String)doc.get("created_at"));
-						KeywordDTO valor = getKeywordDTOFromMap(keyword, createdAt, allStatics);
+						KeywordDTO valor = getKeywordDTOFromMap(keyword, createdAt, false, allStatics);
 						valor.setStatistic(valor.getStatistic() + 1D);
-						setKeywordDTOToMap(valor, allStatics);
+						setKeywordDTOToMap(valor, false, allStatics);
+						valor = getKeywordDTOFromMap(keyword, createdAt, true, monthStatics);
+						valor.setStatistic(valor.getStatistic() + 1D);
+						setKeywordDTOToMap(valor, true, monthStatics);
 					}
 				}
 			} catch (Exception e) {
@@ -128,7 +144,21 @@ public class ArticlesTweetsBatch implements Runnable{
 				mapKeys.forEach((keyword, dto) -> {
 					System.out.println("Year: " + year + " Day: " + dayOf + " Keyword: " + keyword + " Value: " + dto.getStatistic());
 					try {
-						MongoConnector.saveReport(dto);
+						MongoConnector.saveReport(dto, false);
+					} catch (JsonProcessingException e) {
+						// TODO Auto-generated catch block
+						System.out.println("Error at saving report");
+						e.printStackTrace();
+					}
+				});
+			});
+		});
+		monthStatics.forEach((year , mapDays) -> {
+			mapDays.forEach((month, mapKeys) -> {
+				mapKeys.forEach((keyword, dto) -> {
+					System.out.println("Year: " + year + " Month: " + month + " Keyword: " + keyword + " Value: " + dto.getStatistic());
+					try {
+						MongoConnector.saveReport(dto, true);
 					} catch (JsonProcessingException e) {
 						// TODO Auto-generated catch block
 						System.out.println("Error at saving report");
