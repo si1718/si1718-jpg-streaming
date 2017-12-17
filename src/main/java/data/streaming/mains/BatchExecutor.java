@@ -46,10 +46,10 @@ public class BatchExecutor {
 		
 		producerth = new Thread(producer);
 		consumerth = new Thread(consumer);
-		batchHandler = scheduler.scheduleAtFixedRate(batch, 1, 15, TimeUnit.SECONDS);
+		batchHandler = scheduler.scheduleAtFixedRate(batch, 1, 12, TimeUnit.HOURS);
 		
-		/*producerth.start();
-		consumerth.start();*/
+		producerth.start();
+		consumerth.start();
 		
 		final Runnable monitor = new Runnable() {
 			
