@@ -90,6 +90,6 @@ public class BatchExecutor {
 		prevTotal = 0;
 	    prevFree = Runtime.getRuntime().freeMemory();
 		
-		final ScheduledFuture<?> monitorHandler = scheduler.scheduleAtFixedRate(monitor, 0, 1, TimeUnit.MINUTES);
+		final ScheduledFuture<?> monitorHandler = scheduler.scheduleAtFixedRate(monitor, 1, 60, TimeUnit.MINUTES);
 	}
 }
