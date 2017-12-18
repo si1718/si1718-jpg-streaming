@@ -14,6 +14,8 @@ public class BatchExecutor {
 	private static Thread producerth;
 	private static Thread consumerth;
 	private static ScheduledFuture<?> batchHandler;
+	private static long prevTotal;
+    private static long prevFree;
 
 	public static void main(String... args) {
 		final Runnable batch = (Runnable) new ArticlesTweetsBatch();
@@ -57,6 +59,14 @@ public class BatchExecutor {
 			public void run() {
 				System.out.println("Time to check applications");
 				System.out.println("The system is runing with " + Thread.activeCount() + " threads");
+				Runtime rt = Runtime.getRuntime();
+				long total = rt.totalMemory();
+		        long free = rt.freeMemory();
+				long used = total - free;
+	            long prevUsed = (prevTotal - prevFree);
+	            System.out.println("Total Memory: " + total + ", Used: " + used + ", Free: " + free + ", Used since last: " + (used - prevUsed) + ", Free since last: " + (free - prevFree));
+	            prevTotal = total;
+	            prevFree = free;
 				long delay = batchHandler.getDelay(TimeUnit.HOURS);
 				if (!batchHandler.isCancelled() && delay > -3L) {
 					System.out.println("The batch is working");
@@ -77,6 +87,9 @@ public class BatchExecutor {
 			}
 		};
 		
-		final ScheduledFuture<?> monitorHandler = scheduler.scheduleAtFixedRate(monitor, 1, 60, TimeUnit.MINUTES);
+		prevTotal = 0;
+	    prevFree = Runtime.getRuntime().freeMemory();
+		
+		final ScheduledFuture<?> monitorHandler = scheduler.scheduleAtFixedRate(monitor, 0, 1, TimeUnit.MINUTES);
 	}
 }
