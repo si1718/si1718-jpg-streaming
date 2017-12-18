@@ -1,4 +1,4 @@
-package data.streamings.batchs;
+package data.streaming.batchs;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -113,29 +113,38 @@ public class ArticlesTweetsBatch implements Runnable{
 		Set<String> keywords = MongoConnector.getArticlesKeywords();
 		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> allStatics = new HashMap<>();
 		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> monthStatics = new HashMap<>();
-		Iterable<Document> result = MongoConnector.getAlltweets();
+		Long tweetsCount = MongoConnector.getCountTweets();
+		Long tweetNum = 0L;
 		
-		for (Document doc:result) {
-			String tweet = doc.getString("text");
-			if(tweet == null || tweet.isEmpty()) {
-				continue;
+		while (tweetNum < tweetsCount) {
+			Long limit = tweetNum + 100L;
+			if(limit > tweetsCount) {
+				limit = tweetsCount - tweetNum;
 			}
-			try {
-				for(String keyword:keywords){
-					if(tweet.contains(keyword)) {
-						Date createdAt = Utils.formatTwitterDate((String)doc.get("created_at"));
-						KeywordDTO valor = getKeywordDTOFromMap(keyword, createdAt, false, allStatics);
-						valor.setStatistic(valor.getStatistic() + 1D);
-						setKeywordDTOToMap(valor, false, allStatics);
-						valor = getKeywordDTOFromMap(keyword, createdAt, true, monthStatics);
-						valor.setStatistic(valor.getStatistic() + 1D);
-						setKeywordDTOToMap(valor, true, monthStatics);
-					}
+			Iterable<Document> result = MongoConnector.getTweets(tweetNum, limit);
+			for (Document doc:result) {
+				tweetNum += 1;
+				String tweet = doc.getString("text");
+				if(tweet == null || tweet.isEmpty()) {
+					continue;
 				}
-			} catch (Exception e) {
-				// TODO: handle exception
-				System.out.println("ERRR");
-				e.printStackTrace();
+				try {
+					for(String keyword:keywords){
+						if(tweet.contains(keyword)) {
+							Date createdAt = Utils.formatTwitterDate((String)doc.get("created_at"));
+							KeywordDTO valor = getKeywordDTOFromMap(keyword, createdAt, false, allStatics);
+							valor.setStatistic(valor.getStatistic() + 1D);
+							setKeywordDTOToMap(valor, false, allStatics);
+							valor = getKeywordDTOFromMap(keyword, createdAt, true, monthStatics);
+							valor.setStatistic(valor.getStatistic() + 1D);
+							setKeywordDTOToMap(valor, true, monthStatics);
+						}
+					}
+				} catch (Exception e) {
+					// TODO: handle exception
+					System.out.println("ERRR");
+					e.printStackTrace();
+				}
 			}
 		}
 		

@@ -5,7 +5,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import data.streamings.batchs.ArticlesTweetsBatch;
+import data.streaming.batchs.ArticlesTweetsBatch;
 
 public class BatchExecutor {
 
@@ -57,7 +57,8 @@ public class BatchExecutor {
 			public void run() {
 				System.out.println("Time to check applications");
 				System.out.println("The system is runing with " + Thread.activeCount() + " threads");
-				if (!batchHandler.isCancelled()) {
+				long delay = batchHandler.getDelay(TimeUnit.HOURS);
+				if (!batchHandler.isCancelled() && delay > -3L) {
 					System.out.println("The batch is working");
 				} else {
 					System.out.println("The batch is not working :(");
@@ -66,7 +67,6 @@ public class BatchExecutor {
 					batchHandler = scheduler.scheduleAtFixedRate(batch, 1, 12, TimeUnit.HOURS);
 					System.out.println("Restarted!");
 				}
-				long delay = batchHandler.getDelay(TimeUnit.HOURS);
 				if (delay > 0L) {
 					System.out.println("Next batch execution in " + delay + " hours");
 				} else {

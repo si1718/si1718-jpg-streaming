@@ -159,6 +159,19 @@ public class MongoConnector {
 		return result;
 	}
 	
+	public static Long getCountTweets(){
+		openTweetsConnection();
+		Long result = tweetsCollection.count();
+		return result;
+	}
+	
+	public static Iterable<Document> getTweets(Long from, Long to){
+		openTweetsConnection();
+		Long limit = to - from;
+		FindIterable<Document> result = tweetsCollection.find().limit(limit.intValue()).skip(from.intValue());
+		return result;
+	}
+	
 	public static Iterable<Document> getAllArticles(){
 		openArticlesConnection();
 		FindIterable<Document> result = articlesCollection.find();

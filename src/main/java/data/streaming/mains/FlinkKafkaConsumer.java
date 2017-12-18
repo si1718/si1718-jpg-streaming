@@ -21,22 +21,9 @@ public class FlinkKafkaConsumer {
 
 		Properties props = LoggingFactory.getCloudKarafkaCredentials();
 
-
 		env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 
 		DataStream<String> stream = env.addSource(new FlinkKafkaConsumer010<>(props.getProperty("CLOUDKARAFKA_TOPIC").trim(), new SimpleStringSchema(), props));
-		
-//		AllWindowFunction<String, String, TimeWindow> function = new AllWindowFunction<String, String, TimeWindow>() {
-//
-//			private static final long serialVersionUID = -7023217243741221341L;
-//
-//			@Override
-//			public void apply(TimeWindow arg0, Iterable<String> arg1, Collector<String> arg2) throws Exception {
-//				for (String string : arg1) {
-//					arg2.collect(string);
-//				}
-//			}
-//		};
 		
 		stream.filter(x -> Utils.isValid(x)).map(x -> MongoConnector.saveTweetOnDB(x));
 		
