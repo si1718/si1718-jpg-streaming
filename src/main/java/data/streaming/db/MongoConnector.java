@@ -105,7 +105,7 @@ public class MongoConnector {
 		openTweetsConnection();
 		String dto;
 		if(convert) {
-			dto = Utils.convertTweetToPublicationsFormat(tweet);
+			dto = Utils.convertTweetToPublicationsFormat(tweet, false);
 		} else {
 			dto = tweet;
 		}

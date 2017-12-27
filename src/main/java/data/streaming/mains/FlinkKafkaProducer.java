@@ -37,7 +37,7 @@ public class FlinkKafkaProducer {
 		// asíncronas para salvar los datos en MongoDB
 		DataStream<String> stream = env.addSource(twitterSource);
 		
-		DataStream<String> filtredStream = stream.filter(x -> Utils.isValid(x)).map(x -> Utils.convertTweetToPublicationsFormat(x));
+		DataStream<String> filtredStream = stream.filter(x -> Utils.isValid(x)).map(x -> Utils.convertTweetToPublicationsFormat(x, true));
 
 		Properties props = LoggingFactory.getCloudKarafkaCredentials();
 

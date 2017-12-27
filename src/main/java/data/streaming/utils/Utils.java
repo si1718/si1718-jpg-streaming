@@ -29,11 +29,14 @@ public class Utils {
 		return result;
 	}
 	
-	public static String convertTweetToPublicationsFormat(String json) {
+	public static String convertTweetToPublicationsFormat(String json, boolean clean) {
 		TweetDTO tweet = createTweetDTO(json);
 		if(tweet == null) {
 			System.err.println("Cannot convert tweet to publications format");
 			return null;
+		}
+		if(clean) {
+			tweet = cleanTweetFromUnnecessaryData(tweet);
 		}
 		try {
 			return mapper.writeValueAsString(tweet);
@@ -42,6 +45,10 @@ public class Utils {
 			e.printStackTrace();
 		}
 		return null;
+	}
+	
+	public static TweetDTO cleanTweetFromUnnecessaryData(TweetDTO tweet) {
+		return new TweetDTO(tweet.getCreatedAt(), null, tweet.getText(), null);
 	}
 	
 	public static boolean isValid(String x) {
