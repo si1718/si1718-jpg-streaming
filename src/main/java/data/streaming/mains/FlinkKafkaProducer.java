@@ -36,20 +36,22 @@ public class FlinkKafkaProducer {
 		// Añadimos la fuente y generamos el stream como la salida de las llamadas
 		// asíncronas para salvar los datos en MongoDB
 		DataStream<String> stream = env.addSource(twitterSource);
+		
+		DataStream<String> filtredStream = stream.filter(x -> Utils.isValid(x)).map(x -> Utils.convertTweetToPublicationsFormat(x));
 
 		Properties props = LoggingFactory.getCloudKarafkaCredentials();
 
 		FlinkKafkaProducer010.FlinkKafkaProducer010Configuration<String> config = FlinkKafkaProducer010
-				.writeToKafkaWithTimestamps(stream, props.getProperty("CLOUDKARAFKA_TOPIC").trim(), new SimpleStringSchema(),
+				.writeToKafkaWithTimestamps(filtredStream, props.getProperty("CLOUDKARAFKA_TOPIC").trim(), new SimpleStringSchema(),
 						props);
 		config.setWriteTimestampToKafka(false);
 		config.setLogFailuresOnly(false);
 		config.setFlushOnCheckpoint(true);
 		
 		if(Utils.isDebug()) {
-			stream.print();
+			filtredStream.print();
 		}
-
+		
 		env.execute("Twitter Streaming Producer");
 	}
 

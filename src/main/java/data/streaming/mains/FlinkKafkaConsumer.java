@@ -25,12 +25,11 @@ public class FlinkKafkaConsumer {
 
 		DataStream<String> stream = env.addSource(new FlinkKafkaConsumer010<>(props.getProperty("CLOUDKARAFKA_TOPIC").trim(), new SimpleStringSchema(), props));
 		
-		stream.filter(x -> Utils.isValid(x)).map(x -> MongoConnector.saveTweetOnDB(x));
+		stream.filter(x -> Utils.isValid(x)).map(x -> MongoConnector.saveTweetOnDB(x, true));
 		
 		if (Utils.isDebug()) {
 			stream.print();
 		}
-		
 		// execute program
 		env.execute("Twitter Streaming Consumer");
 	}

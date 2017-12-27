@@ -5,20 +5,29 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.bson.Document;
+import org.grouplens.lenskit.ItemRecommender;
+import org.grouplens.lenskit.RecommenderBuildException;
+import org.grouplens.lenskit.scored.ScoredId;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.google.common.collect.Maps;
+
 import data.streaming.db.MongoConnector;
 import data.streaming.dto.ArticleRatingDTO;
 import data.streaming.dto.KeywordDTO;
+import data.streaming.recommender.Recom;
 import data.streaming.utils.Utils;
 
 public class ArticlesTweetsBatch implements Runnable{
 
+	private static final int MAX_RECOMMENDATIONS = 5;
 	private static boolean workingInProgress = false;
 	
 	private void initServices() {
@@ -40,11 +49,26 @@ public class ArticlesTweetsBatch implements Runnable{
 				e.printStackTrace();
 			}
 			try {
+				System.out.println("Recovering DB free space");
+				MongoConnector.repairDatabase();
+				System.out.println("Recovered");
+			} catch (Exception e) {
+				System.err.println("Error while recovering DB free space");
+			}
+			try {
 				System.out.println("Ratings part");
 				calculateArticlesRatings();
 				System.out.println("Ratings part finish");
 			} catch (Exception e) {
 				System.out.println("Ratings part error");
+				e.printStackTrace();
+			}
+			try {
+				System.out.println("Recommender part");
+				calculateRecommendations();
+				System.out.println("Recommender part finish");
+			} catch (Exception e) {
+				System.out.println("Recommender part error");
 				e.printStackTrace();
 			}
 			workingInProgress = false;
@@ -110,18 +134,26 @@ public class ArticlesTweetsBatch implements Runnable{
 	}
 	
 	public void calculateTweetsStats() {
+		MongoConnector.deleteNullTweets();
 		Set<String> keywords = MongoConnector.getArticlesKeywords();
 		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> allStatics = new HashMap<>();
 		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> monthStatics = new HashMap<>();
+		List<String> tweetsToDelete = new ArrayList<String>();
 		Long tweetsCount = MongoConnector.getCountTweets();
 		Long tweetNum = 0L;
+		Long limit = 100L;
 		
 		while (tweetNum < tweetsCount) {
-			Long limit = tweetNum + 100L;
-			if(limit > tweetsCount) {
+			if(!tweetsToDelete.isEmpty()) {
+				MongoConnector.deleteListTweet(tweetsToDelete);
+				tweetsToDelete.clear();
+			}
+			
+			if((tweetNum + 100L) > tweetsCount) {
 				limit = tweetsCount - tweetNum;
 			}
-			Iterable<Document> result = MongoConnector.getTweets(tweetNum, limit);
+			
+			Iterable<Document> result = MongoConnector.getTweets(0L, limit);
 			for (Document doc:result) {
 				tweetNum += 1;
 				String tweet = doc.getString("text");
@@ -141,11 +173,17 @@ public class ArticlesTweetsBatch implements Runnable{
 						}
 					}
 				} catch (Exception e) {
-					// TODO: handle exception
-					System.out.println("ERRR");
+					System.out.println("Error while calculating tweet stats");
 					e.printStackTrace();
+				}finally {
+					tweetsToDelete.add(tweet);
 				}
 			}
+		}
+		
+		if(!tweetsToDelete.isEmpty()) {
+			MongoConnector.deleteListTweet(tweetsToDelete);
+			tweetsToDelete.clear();
 		}
 		
 		allStatics.forEach((year , mapDays) -> {
@@ -155,7 +193,6 @@ public class ArticlesTweetsBatch implements Runnable{
 					try {
 						MongoConnector.saveReport(dto, false);
 					} catch (JsonProcessingException e) {
-						// TODO Auto-generated catch block
 						System.out.println("Error at saving report");
 						e.printStackTrace();
 					}
@@ -169,7 +206,6 @@ public class ArticlesTweetsBatch implements Runnable{
 					try {
 						MongoConnector.saveReport(dto, true);
 					} catch (JsonProcessingException e) {
-						// TODO Auto-generated catch block
 						System.out.println("Error at saving report");
 						e.printStackTrace();
 					}
@@ -200,11 +236,14 @@ public class ArticlesTweetsBatch implements Runnable{
 									}
 								}
 								if(coincidences >= 1) {
-									Integer min = Math.min(artKey.size(), artBKey.size());
-									Double rawRating = (coincidences * 5) / (1D * min);
+									Double rawRating = (coincidences * 5) / (1D * artKey.size());
+									Double rawReverseRating = (coincidences * 5) / (1D * artBKey.size());
 									Integer rating = (int) Math.round(rawRating);
+									Integer reverseRating = (int) Math.round(rawReverseRating);
 									ArticleRatingDTO articleRating = new ArticleRatingDTO(idArticleA, idArticleB, rating);
+									ArticleRatingDTO articleReverseRating = new ArticleRatingDTO(idArticleB, idArticleA, reverseRating);
 									ratings.add(articleRating);
+									ratings.add(articleReverseRating);
 								}
 							}
 						}
@@ -215,5 +254,46 @@ public class ArticlesTweetsBatch implements Runnable{
 		}
 		System.out.println("Found " + ratings.size() + " ratings!" );
 		MongoConnector.saveRatings(ratings);
+	}
+	
+	public static void calculateRecommendations() {
+		Iterable<Document> documents = MongoConnector.getAllArticleRatings();
+		Set<ArticleRatingDTO> articlesRatings = new HashSet<ArticleRatingDTO>();
+		for(Document doc:documents) {
+			if(doc != null) {
+				String articleA = doc.getString("articleA");
+				String articleB = doc.getString("articleB");
+				Double points = doc.getDouble("rating");
+				ArticleRatingDTO dto = new ArticleRatingDTO(articleA, articleB, points);
+				articlesRatings.add(dto);
+			}
+		}
+		try {
+			Map<String, Long> keys = Maps.asMap(articlesRatings.stream().map((ArticleRatingDTO x) -> x.getArticleA()).collect(Collectors.toSet()), (String y) -> new Long(y.hashCode()));
+			Map<Long, String> reverse = new HashMap<>();
+			keys.forEach((x, y) -> reverse.put(y, x));
+			ItemRecommender recom = Recom.getRecommender(articlesRatings);
+			for (String key:keys.keySet()) {
+				List<ScoredId> recommendations = recom.recommend(keys.get(key), MAX_RECOMMENDATIONS);
+				for(ScoredId score:recommendations) {
+					Long keyB = score.getId();
+					String objectB = reverse.get(keyB);
+					if(key.equals(objectB)) {
+						continue;
+					}
+					Double ss = score.getScore();
+					try {
+						ArticleRatingDTO rating = new ArticleRatingDTO(key, objectB, ss);
+						MongoConnector.saveRecommendation(rating);
+					} catch (Exception e) {
+						System.err.println("Error while saving recommendation.");
+						e.printStackTrace();
+					}
+				}
+			}
+		} catch (RecommenderBuildException e) {
+			System.err.println("Cannot get recommender");
+			e.printStackTrace();
+		}
 	}
 }

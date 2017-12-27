@@ -7,17 +7,21 @@ public class ArticleRatingDTO {
 
 	String articleA;
 	String articleB;
-	Integer rating;
+	Double rating;
 	
 	public ArticleRatingDTO() {
 		
 	}	
 	
 	public ArticleRatingDTO(String articleA, String articleB, Integer rating) {
+		this(articleA, articleB, new Double(rating));
+	}
+	
+	public ArticleRatingDTO(String articleA, String articleB, Double score) {
 		super();
 		this.articleA = articleA;
 		this.articleB = articleB;
-		this.rating = rating;
+		this.rating = score;
 	}
 
 	@Override
@@ -67,13 +71,15 @@ public class ArticleRatingDTO {
 		this.articleB = articleB;
 	}
 
-	public Integer getRating() {
+	public Double getRating() {
 		return rating;
 	}
 
-	public void setRating(Integer rating) {
+	public void setRating(Double rating) {
 		this.rating = rating;
 	}
+	
+	
 
 	@Override
 	public String toString() {

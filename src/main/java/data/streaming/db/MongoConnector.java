@@ -20,6 +20,7 @@ import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.result.DeleteResult;
 
 import data.streaming.dto.ArticleRatingDTO;
 import data.streaming.dto.KeywordDTO;
@@ -30,6 +31,7 @@ public class MongoConnector {
 	
 	private static MongoCollection<Document> articlesCollection;
 	private static MongoCollection<Document> tweetsCollection;
+	private static MongoCollection<Document> recommendationsCollection;
 	private static MongoCollection<Document> reportsCollection;
 	private static MongoClient mongoClient;
 	private static MongoDatabase database;
@@ -60,18 +62,36 @@ public class MongoConnector {
 	}
 	
 	public static void openArticlesConnection() {
+		if(MongoConnector.articlesCollection != null) {
+			return;
+		}
 		openConnection();
 		MongoCollection<Document> collection = database.getCollection("articles");
 		MongoConnector.articlesCollection = collection;
 	}
 	
 	public static void openTweetsConnection() {
+		if(MongoConnector.tweetsCollection != null) {
+			return;
+		}
 		openConnection();
 		MongoCollection<Document> collection = database.getCollection("tweets");
 		MongoConnector.tweetsCollection = collection;
 	}
 	
+	public static void openRecommendationsConnection() {
+		if(MongoConnector.recommendationsCollection != null) {
+			return;
+		}
+		openConnection();
+		MongoCollection<Document> collection = database.getCollection("recommendations");
+		MongoConnector.recommendationsCollection = collection;
+	}
+	
 	public static void openReportsConnection() {
+		if(MongoConnector.reportsCollection != null) {
+			return;
+		}
 		openConnection();
 		MongoCollection<Document> collection = database.getCollection("reports");
 		MongoConnector.reportsCollection = collection;
@@ -81,9 +101,14 @@ public class MongoConnector {
 		mongoClient.close();
 	}
 	
-	public static boolean saveTweetOnDB(String tweet) {
+	public static boolean saveTweetOnDB(String tweet, boolean convert) {
 		openTweetsConnection();
-		String dto = Utils.convertTweetToPublicationsFormat(tweet);
+		String dto;
+		if(convert) {
+			dto = Utils.convertTweetToPublicationsFormat(tweet);
+		} else {
+			dto = tweet;
+		}
 		if(dto != null) {
 			tweetsCollection.insertOne(Document.parse(dto));
 		} else {
@@ -115,11 +140,10 @@ public class MongoConnector {
 		doc.append("report_day", dayOf);
 		KeywordDTO existing = getKeywordReport(keyword.getKeyword(), keyword.getTime(), byMonth);
 		if(existing != null) {
-			if(keyword.getStatistic() >= existing.getStatistic()) {
-				reportsCollection.replaceOne(getFilterForKeyword(keyword, byMonth), doc);
-			} else {
-				System.out.println("New report is lower than older, maybe tweet data was deleted. New one is ignored.");
-			}
+			Double score = keyword.getStatistic() + existing.getStatistic();
+			doc.put("statistic", score);
+			System.out.println("Updating existing report on date: " + dayOf + "/" + year + " byMonth: " + byMonth + ". Old: " + existing.getStatistic() + " New: " + score);
+			reportsCollection.replaceOne(getFilterForKeyword(keyword, byMonth), doc);
 		} else {
 			reportsCollection.insertOne(doc);
 		}
@@ -131,7 +155,7 @@ public class MongoConnector {
 			try {
 				saveRating(x);
 			} catch (JsonProcessingException e) {
-				// TODO Auto-generated catch block
+				System.err.println("Cannot save rating!");
 				e.printStackTrace();
 			}
 		});
@@ -151,6 +175,44 @@ public class MongoConnector {
 			reportsCollection.insertOne(doc);
 		}
 		return true;
+	}
+	
+	public static boolean saveRecommendation(ArticleRatingDTO recomm) throws JsonProcessingException {
+		openRecommendationsConnection();
+		ArticleRatingDTO existing = getRecommendation(recomm.getArticleA(), recomm.getArticleB());
+		ObjectMapper mapper = new ObjectMapper();
+		String json = mapper.writeValueAsString(recomm);
+		Document doc = Document.parse(json);
+		if(existing != null) {
+			recommendationsCollection.replaceOne(getFilterForRecommendation(recomm), doc);
+		} else {
+			recommendationsCollection.insertOne(doc);
+		}
+		return true;
+	}
+	
+	public static Long deleteNullTweets() {
+		openTweetsConnection();
+		Bson filterId = Filters.eq("text", null);
+		DeleteResult result = tweetsCollection.deleteMany(filterId);
+		return result.getDeletedCount();
+	}
+	
+	public static boolean deleteListTweet(List<String> tweets) {
+		for (String string : tweets) {
+			deleteTweet(string);
+		}
+		return true;
+	}
+	
+	public static boolean deleteTweet(String strId) {
+		openTweetsConnection();
+		Bson filterId = Filters.eq("text", strId);
+		DeleteResult result = tweetsCollection.deleteOne(filterId);
+		if(result.getDeletedCount() != 0L) {
+			return true;
+		}
+		return false;
 	}
 	
 	public static Iterable<Document> getAlltweets(){
@@ -238,6 +300,38 @@ public class MongoConnector {
 		return null;
 	}
 	
+	public static Iterable<Document> getAllArticleRatings() {
+		openReportsConnection();
+		Bson filterType = Filters.eq("report_type", "articleRating");
+		return reportsCollection.find(filterType);
+	}
+	
+	public static ArticleRatingDTO getRecommendation(String objectA, String objectB) {
+		openRecommendationsConnection();
+		ArticleRatingDTO filter = new ArticleRatingDTO(objectA, objectB, 0);
+		FindIterable<Document> result = recommendationsCollection.find(getFilterForRecommendation(filter));
+		if(result != null && result.first() != null) {
+			Document doc = result.first();
+			ObjectMapper mapper = new ObjectMapper();
+			ArticleRatingDTO dto;
+			try {
+				dto = mapper.readValue(doc.toJson(), ArticleRatingDTO.class);
+				return dto;
+			} catch (Exception e) {
+				System.err.println("Error, cannot convert to DTO");
+				e.printStackTrace();
+				return null;
+			} 
+		}
+		return null;
+	}
+	private static Bson getFilterForRecommendation(ArticleRatingDTO recommend) {
+		Bson filterArtA = Filters.eq("articleA", recommend.getArticleA());
+		Bson filterArtB = Filters.eq("articleB", recommend.getArticleB());
+		Bson filterAnd = Filters.and(filterArtA, filterArtB);
+		return filterAnd;
+	}
+	
 	private static Bson getFilterForRating(ArticleRatingDTO rating) {
 		Bson filterArtA = Filters.eq("articleA", rating.getArticleA());
 		Bson filterArtB = Filters.eq("articleB", rating.getArticleB());
@@ -261,20 +355,5 @@ public class MongoConnector {
 		Bson filterDay = Filters.eq("report_day", dayOf);
 		Bson filterAnd = Filters.and(filterKey, filterType, filterYear, filterDay);
 		return filterAnd;
-	}
-
-	private static MongoCollection<Document> getArticlesCollection() {
-		openArticlesConnection();
-		return articlesCollection;
-	}
-
-	private static MongoCollection<Document> getTweetsCollection() {
-		openTweetsConnection();
-		return tweetsCollection;
-	}
-	
-	private static MongoCollection<Document> getReportsCollection() {
-		openTweetsConnection();
-		return reportsCollection;
 	}
 }
