@@ -11,7 +11,7 @@ import org.apache.flink.streaming.connectors.twitter.TwitterSource;
 import org.apache.flink.streaming.util.serialization.SimpleStringSchema;
 
 import data.streaming.auxi.ValidTagsTweetEndpoIntinitializer;
-import data.streaming.db.MongoConnector;
+import data.streaming.db.MongoStreaming;
 import data.streaming.utils.LoggingFactory;
 import data.streaming.utils.Utils;
 
@@ -23,7 +23,7 @@ public class FlinkKafkaProducer {
 
 		TwitterSource twitterSource = new TwitterSource(LoggingFactory.getTwitterCredentias());
 		
-		Set<String> keywords = MongoConnector.getArticlesKeywords();
+		Set<String> keywords = MongoStreaming.getArticlesKeywords();
 
 		// Establecemos el filtro
 		twitterSource.setCustomEndpointInitializer(new ValidTagsTweetEndpoIntinitializer(keywords.toArray(new String[keywords.size()])));

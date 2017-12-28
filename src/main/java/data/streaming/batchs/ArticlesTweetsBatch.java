@@ -19,7 +19,9 @@ import org.grouplens.lenskit.scored.ScoredId;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.collect.Maps;
 
-import data.streaming.db.MongoConnector;
+import data.common.db.MongoConnector;
+import data.scraping.scraper.ArticlesScrapper;
+import data.streaming.db.MongoStreaming;
 import data.streaming.dto.ArticleRatingDTO;
 import data.streaming.dto.KeywordDTO;
 import data.streaming.recommender.Recom;
@@ -69,6 +71,14 @@ public class ArticlesTweetsBatch implements Runnable{
 				System.out.println("Recommender part finish");
 			} catch (Exception e) {
 				System.out.println("Recommender part error");
+				e.printStackTrace();
+			}
+			try {
+				System.out.println("New Articles part");
+				ArticlesScrapper.crawDepartamentList();
+				System.out.println("New Articles finish");
+			} catch (Exception e) {
+				System.out.println("New Articles part error");
 				e.printStackTrace();
 			}
 			workingInProgress = false;
@@ -134,18 +144,18 @@ public class ArticlesTweetsBatch implements Runnable{
 	}
 	
 	public void calculateTweetsStats() {
-		MongoConnector.deleteNullTweets();
-		Set<String> keywords = MongoConnector.getArticlesKeywords();
+		MongoStreaming.deleteNullTweets();
+		Set<String> keywords = MongoStreaming.getArticlesKeywords();
 		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> allStatics = new HashMap<>();
 		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> monthStatics = new HashMap<>();
 		List<String> tweetsToDelete = new ArrayList<String>();
-		Long tweetsCount = MongoConnector.getCountTweets();
+		Long tweetsCount = MongoStreaming.getCountTweets();
 		Long tweetNum = 0L;
 		Long limit = 100L;
 		
 		while (tweetNum < tweetsCount) {
 			if(!tweetsToDelete.isEmpty()) {
-				MongoConnector.deleteListTweet(tweetsToDelete);
+				MongoStreaming.deleteListTweet(tweetsToDelete);
 				tweetsToDelete.clear();
 			}
 			
@@ -153,7 +163,7 @@ public class ArticlesTweetsBatch implements Runnable{
 				limit = tweetsCount - tweetNum;
 			}
 			
-			Iterable<Document> result = MongoConnector.getTweets(0L, limit);
+			Iterable<Document> result = MongoStreaming.getTweets(0L, limit);
 			for (Document doc:result) {
 				tweetNum += 1;
 				String tweet = doc.getString("text");
@@ -182,7 +192,7 @@ public class ArticlesTweetsBatch implements Runnable{
 		}
 		
 		if(!tweetsToDelete.isEmpty()) {
-			MongoConnector.deleteListTweet(tweetsToDelete);
+			MongoStreaming.deleteListTweet(tweetsToDelete);
 			tweetsToDelete.clear();
 		}
 		
@@ -191,7 +201,7 @@ public class ArticlesTweetsBatch implements Runnable{
 				mapKeys.forEach((keyword, dto) -> {
 					System.out.println("Year: " + year + " Day: " + dayOf + " Keyword: " + keyword + " Value: " + dto.getStatistic());
 					try {
-						MongoConnector.saveReport(dto, false);
+						MongoStreaming.saveReport(dto, false);
 					} catch (JsonProcessingException e) {
 						System.out.println("Error at saving report");
 						e.printStackTrace();
@@ -204,7 +214,7 @@ public class ArticlesTweetsBatch implements Runnable{
 				mapKeys.forEach((keyword, dto) -> {
 					System.out.println("Year: " + year + " Month: " + month + " Keyword: " + keyword + " Value: " + dto.getStatistic());
 					try {
-						MongoConnector.saveReport(dto, true);
+						MongoStreaming.saveReport(dto, true);
 					} catch (JsonProcessingException e) {
 						System.out.println("Error at saving report");
 						e.printStackTrace();
@@ -216,7 +226,7 @@ public class ArticlesTweetsBatch implements Runnable{
 	
 	@SuppressWarnings("unchecked")
 	public void calculateArticlesRatings(){
-		Iterable<Document> documents = MongoConnector.getAllArticles();
+		Iterable<Document> documents = MongoStreaming.getAllArticles();
 		List<Document> articles = new ArrayList<>();
 		List<ArticleRatingDTO> ratings = new ArrayList<>();
 		for(Document article:documents) {
@@ -253,11 +263,11 @@ public class ArticlesTweetsBatch implements Runnable{
 			}
 		}
 		System.out.println("Found " + ratings.size() + " ratings!" );
-		MongoConnector.saveRatings(ratings);
+		MongoStreaming.saveRatings(ratings);
 	}
 	
 	public static void calculateRecommendations() {
-		Iterable<Document> documents = MongoConnector.getAllArticleRatings();
+		Iterable<Document> documents = MongoStreaming.getAllArticleRatings();
 		Set<ArticleRatingDTO> articlesRatings = new HashSet<ArticleRatingDTO>();
 		for(Document doc:documents) {
 			if(doc != null) {
@@ -284,7 +294,7 @@ public class ArticlesTweetsBatch implements Runnable{
 					Double ss = score.getScore();
 					try {
 						ArticleRatingDTO rating = new ArticleRatingDTO(key, objectB, ss);
-						MongoConnector.saveRecommendation(rating);
+						MongoStreaming.saveRecommendation(rating);
 					} catch (Exception e) {
 						System.err.println("Error while saving recommendation.");
 						e.printStackTrace();

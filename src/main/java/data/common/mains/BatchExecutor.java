@@ -1,4 +1,4 @@
-package data.streaming.mains;
+package data.common.mains;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -6,6 +6,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import data.streaming.batchs.ArticlesTweetsBatch;
+import data.streaming.mains.FlinkKafkaConsumer;
+import data.streaming.mains.FlinkKafkaProducer;
 
 public class BatchExecutor {
 
@@ -40,7 +42,7 @@ public class BatchExecutor {
 				try {
 					FlinkKafkaConsumer.main(args);
 				} catch (Exception e) {
-					System.err.println("Cannot start producer");
+					System.err.println("Cannot start consumer");
 					e.printStackTrace();
 				}
 			}
@@ -82,6 +84,28 @@ public class BatchExecutor {
 				} else {
 					delay = batchHandler.getDelay(TimeUnit.MINUTES);
 					System.out.println("Next batch execution in " + delay + " minutes");
+				}
+				if(FlinkKafkaConsumer.isStopped() || !consumerth.isAlive()) {
+					System.out.println("Consumer is not working, restarting...");
+					if(consumerth.isAlive()) {
+						consumerth.interrupt();
+					}
+					consumerth = new Thread(consumer);
+					consumerth.start();
+					System.out.println("Consumer restarted");
+				} else {
+					System.out.println("Consumer is working.");
+				}
+				if(!producerth.isAlive()) {
+					System.out.println("Producer is not working, restarting...");
+					if(producerth.isAlive()) {
+						producerth.interrupt();
+					}
+					producerth = new Thread(producer);
+					producerth.start();
+					System.out.println("Producer restarted");
+				} else {
+					System.out.println("Producer is working.");
 				}
 				System.out.println("System checked!");
 			}

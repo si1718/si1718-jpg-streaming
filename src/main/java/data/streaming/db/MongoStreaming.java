@@ -12,93 +12,58 @@ import org.bson.conversions.Bson;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mongodb.BasicDBObject;
-import com.mongodb.MongoClient;
-import com.mongodb.MongoClientOptions;
-import com.mongodb.MongoClientURI;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.result.DeleteResult;
 
+import data.common.db.MongoConnector;
 import data.streaming.dto.ArticleRatingDTO;
 import data.streaming.dto.KeywordDTO;
 import data.streaming.utils.Utils;
 
-public class MongoConnector {
+public class MongoStreaming {
 
 	
 	private static MongoCollection<Document> articlesCollection;
 	private static MongoCollection<Document> tweetsCollection;
 	private static MongoCollection<Document> recommendationsCollection;
 	private static MongoCollection<Document> reportsCollection;
-	private static MongoClient mongoClient;
-	private static MongoDatabase database;
-	
-	public static void openConnection() {
-		if(mongoClient != null) {
-			return;
-		}
-		
-		MongoClientOptions.Builder optionsBuilder = MongoClientOptions.builder();
-		optionsBuilder.connectTimeout(50 * 1000);
-		MongoClientURI connectionString = new MongoClientURI(System.getenv("MONGO_DATABASE_URL"), optionsBuilder);
-		MongoClient mongoClient = new MongoClient(connectionString);
-		MongoDatabase database = mongoClient.getDatabase("si1718-jpg-publications");
-		MongoConnector.mongoClient = mongoClient;
-		MongoConnector.database = database;
-	}
-	
-	public static boolean repairDatabase() {
-		Document result = database.runCommand(new BasicDBObject("repairDatabase", 1));
-		if(result != null) {
-			Double code = (Double) result.get("ok");
-			if(code != null && code.equals(1.0D)) {
-				return true;
-			}
-		}
-		return false;
-	}
 	
 	public static void openArticlesConnection() {
-		if(MongoConnector.articlesCollection != null) {
+		if(MongoStreaming.articlesCollection != null) {
 			return;
 		}
-		openConnection();
-		MongoCollection<Document> collection = database.getCollection("articles");
-		MongoConnector.articlesCollection = collection;
+		MongoConnector.openConnection();
+		MongoCollection<Document> collection = MongoConnector.getDatabase().getCollection("articles");
+		MongoStreaming.articlesCollection = collection;
 	}
 	
 	public static void openTweetsConnection() {
-		if(MongoConnector.tweetsCollection != null) {
+		if(MongoStreaming.tweetsCollection != null) {
 			return;
 		}
-		openConnection();
-		MongoCollection<Document> collection = database.getCollection("tweets");
-		MongoConnector.tweetsCollection = collection;
+		MongoConnector.openConnection();
+		MongoCollection<Document> collection = MongoConnector.getDatabase().getCollection("tweets");
+		MongoStreaming.tweetsCollection = collection;
 	}
 	
 	public static void openRecommendationsConnection() {
-		if(MongoConnector.recommendationsCollection != null) {
+		if(MongoStreaming.recommendationsCollection != null) {
 			return;
 		}
-		openConnection();
-		MongoCollection<Document> collection = database.getCollection("recommendations");
-		MongoConnector.recommendationsCollection = collection;
+		MongoConnector.openConnection();
+		MongoCollection<Document> collection = MongoConnector.getDatabase().getCollection("recommendations");
+		MongoStreaming.recommendationsCollection = collection;
 	}
 	
 	public static void openReportsConnection() {
-		if(MongoConnector.reportsCollection != null) {
+		if(MongoStreaming.reportsCollection != null) {
 			return;
 		}
-		openConnection();
-		MongoCollection<Document> collection = database.getCollection("reports");
-		MongoConnector.reportsCollection = collection;
-	}
-	
-	public static void closeConnection() {
-		mongoClient.close();
+		MongoConnector.openConnection();
+		MongoCollection<Document> collection = MongoConnector.getDatabase().getCollection("reports");
+		MongoStreaming.reportsCollection = collection;
 	}
 	
 	public static boolean saveTweetOnDB(String tweet, boolean convert) {
