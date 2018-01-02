@@ -3,10 +3,7 @@ package data.streaming.db;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-
 import org.bson.Document;
 import org.bson.conversions.Bson;
 
@@ -24,20 +21,10 @@ import data.streaming.utils.Utils;
 
 public class MongoStreaming {
 
-	
-	private static MongoCollection<Document> articlesCollection;
 	private static MongoCollection<Document> tweetsCollection;
 	private static MongoCollection<Document> recommendationsCollection;
 	private static MongoCollection<Document> reportsCollection;
 	
-	public static void openArticlesConnection() {
-		if(MongoStreaming.articlesCollection != null) {
-			return;
-		}
-		MongoConnector.openConnection();
-		MongoCollection<Document> collection = MongoConnector.getDatabase().getCollection("articles");
-		MongoStreaming.articlesCollection = collection;
-	}
 	
 	public static void openTweetsConnection() {
 		if(MongoStreaming.tweetsCollection != null) {
@@ -199,30 +186,12 @@ public class MongoStreaming {
 		return result;
 	}
 	
-	public static Iterable<Document> getAllArticles(){
-		openArticlesConnection();
-		FindIterable<Document> result = articlesCollection.find();
+	public static Iterable<Document> getDailyReports(Long from, Long to){
+		openReportsConnection();
+		Long limit = to - from;
+		Bson filterType = Filters.eq("report_type", "tweet");
+		FindIterable<Document> result = reportsCollection.find(filterType).limit(limit.intValue()).skip(from.intValue());
 		return result;
-	}
-	
-	@SuppressWarnings("unchecked")
-	public static Set<String> getArticlesKeywords(){
-		openArticlesConnection();
-		Set<String> keywords = new HashSet<String>();
-		Iterable<Document> articles = articlesCollection.find();
-		for (Document e:articles) {
-			if (e.containsKey("keywords")) {
-				Object rawKeys = e.get("keywords");
-				if(rawKeys != null && rawKeys instanceof List) {
-					for (String s : (List<String>) rawKeys) {
-						if(s != null) {
-							keywords.add(s.trim().toLowerCase());
-						}
-					}
-				}
-			}
-		}
-		return keywords;
 	}
 	
 	public static KeywordDTO getKeywordReport(String keyword, Date time, boolean byMonth) {
@@ -290,6 +259,7 @@ public class MongoStreaming {
 		}
 		return null;
 	}
+	
 	private static Bson getFilterForRecommendation(ArticleRatingDTO recommend) {
 		Bson filterArtA = Filters.eq("articleA", recommend.getArticleA());
 		Bson filterArtB = Filters.eq("articleB", recommend.getArticleB());

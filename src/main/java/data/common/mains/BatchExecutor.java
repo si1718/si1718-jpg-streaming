@@ -5,7 +5,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import data.streaming.batchs.ArticlesTweetsBatch;
 import data.streaming.mains.FlinkKafkaConsumer;
 import data.streaming.mains.FlinkKafkaProducer;
 
@@ -20,7 +19,7 @@ public class BatchExecutor {
     private static long prevFree;
 
 	public static void main(String... args) {
-		final Runnable batch = (Runnable) new ArticlesTweetsBatch();
+		final Runnable batch = (Runnable) new ArticlesRunnable();
 		
 		final Runnable producer = new Runnable() {
 			

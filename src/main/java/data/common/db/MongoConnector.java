@@ -1,16 +1,24 @@
 package data.common.db;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import org.bson.Document;
 import com.mongodb.BasicDBObject;
 import com.mongodb.MongoClient;
 import com.mongodb.MongoClientOptions;
 import com.mongodb.MongoClientURI;
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 
 public class MongoConnector {
 
 	private static MongoClient mongoClient;
 	private static MongoDatabase database;
+	
+	private static MongoCollection<Document> articlesCollection;
 	
 	public static void openConnection() {
 		if(mongoClient != null) {
@@ -44,5 +52,47 @@ public class MongoConnector {
 
 	public static MongoDatabase getDatabase() {
 		return database;
+	}
+	
+	public static void openArticlesConnection() {
+		if(MongoConnector.articlesCollection != null) {
+			return;
+		}
+		MongoConnector.openConnection();
+		MongoCollection<Document> collection = MongoConnector.getDatabase().getCollection("articles");
+		MongoConnector.articlesCollection = collection;
+	}
+	
+	public static Iterable<Document> getAllArticles(){
+		openArticlesConnection();
+		FindIterable<Document> result = articlesCollection.find();
+		return result;
+	}
+	
+	public static Iterable<Document> getArticles(Long from, Long to){
+		openArticlesConnection();
+		Long limit = to - from;
+		FindIterable<Document> result = articlesCollection.find().limit(limit.intValue()).skip(from.intValue());
+		return result;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public static Set<String> getArticlesKeywords(){
+		openArticlesConnection();
+		Set<String> keywords = new HashSet<String>();
+		Iterable<Document> articles = articlesCollection.find();
+		for (Document e:articles) {
+			if (e.containsKey("keywords")) {
+				Object rawKeys = e.get("keywords");
+				if(rawKeys != null && rawKeys instanceof List) {
+					for (String s : (List<String>) rawKeys) {
+						if(s != null) {
+							keywords.add(s.trim().toLowerCase());
+						}
+					}
+				}
+			}
+		}
+		return keywords;
 	}
 }

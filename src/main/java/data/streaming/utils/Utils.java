@@ -3,12 +3,17 @@ package data.streaming.utils;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.Locale;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import data.scraping.dto.Article;
+import data.scraping.dto.ArticleNumberGraphDTO;
+import data.streaming.dto.KeywordDTO;
 import data.streaming.dto.TweetDTO;
 
 public class Utils {
@@ -75,5 +80,56 @@ public class Utils {
 		} catch (ParseException e) {
 			return null;
 		}
+	}
+	
+	public static KeywordDTO convertJsonToKeywordDTO(String json) {
+		ObjectMapper mapper = new ObjectMapper();
+		KeywordDTO dto;
+		try {
+			dto = mapper.readValue(json, KeywordDTO.class);
+			return dto;
+		} catch (Exception e) {
+			System.err.println("Error, cannot convert to DTO");
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public static ArticleNumberGraphDTO convertJsonToArticlesNumberGraphDTO(String json) {
+		ObjectMapper mapper = new ObjectMapper();
+		ArticleNumberGraphDTO dto;
+		try {
+			dto = mapper.readValue(json, ArticleNumberGraphDTO.class);
+			return dto;
+		} catch (Exception e) {
+			System.err.println("Error, cannot convert to DTO");
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public static Article convertJsonToArticleDTO(String json) {
+		ObjectMapper mapper = new ObjectMapper();
+		Article dto;
+		try {
+			dto = mapper.readValue(json, Article.class);
+			return dto;
+		} catch (Exception e) {
+			System.err.println("Error, cannot convert to DTO");
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public static Integer extractDayFromDate(Date date) {
+		LocalDate locdate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+		Integer dayOf = locdate.getDayOfYear();
+		return dayOf;
+	}
+	
+	public static Integer extractYearFromDate(Date date) {
+		LocalDate locdate = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+		Integer year = locdate.getYear();
+		return year;
 	}
 }

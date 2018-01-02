@@ -18,74 +18,16 @@ import org.grouplens.lenskit.scored.ScoredId;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.collect.Maps;
-
 import data.common.db.MongoConnector;
-import data.scraping.scraper.ArticlesScrapper;
 import data.streaming.db.MongoStreaming;
 import data.streaming.dto.ArticleRatingDTO;
 import data.streaming.dto.KeywordDTO;
 import data.streaming.recommender.Recom;
 import data.streaming.utils.Utils;
 
-public class ArticlesTweetsBatch implements Runnable{
+public class ArticlesTweetsBatch {
 
 	private static final int MAX_RECOMMENDATIONS = 5;
-	private static boolean workingInProgress = false;
-	
-	private void initServices() {
-		
-	}
-	
-	@Override
-	public void run() {
-		initServices();
-		if(!workingInProgress) {
-			workingInProgress = true;
-			System.out.println("System start!");
-			try {
-				System.out.println("Tweets part");
-				calculateTweetsStats();
-				System.out.println("Tweets part finish");
-			} catch (Exception e) {
-				System.out.println("Tweets part error");
-				e.printStackTrace();
-			}
-			try {
-				System.out.println("Recovering DB free space");
-				MongoConnector.repairDatabase();
-				System.out.println("Recovered");
-			} catch (Exception e) {
-				System.err.println("Error while recovering DB free space");
-			}
-			try {
-				System.out.println("Ratings part");
-				calculateArticlesRatings();
-				System.out.println("Ratings part finish");
-			} catch (Exception e) {
-				System.out.println("Ratings part error");
-				e.printStackTrace();
-			}
-			try {
-				System.out.println("Recommender part");
-				calculateRecommendations();
-				System.out.println("Recommender part finish");
-			} catch (Exception e) {
-				System.out.println("Recommender part error");
-				e.printStackTrace();
-			}
-			try {
-				System.out.println("New Articles part");
-				ArticlesScrapper.crawDepartamentList();
-				System.out.println("New Articles finish");
-			} catch (Exception e) {
-				System.out.println("New Articles part error");
-				e.printStackTrace();
-			}
-			workingInProgress = false;
-		} else {
-			System.out.println("The system is already working");
-		}
-	}
 	
 	public static KeywordDTO getKeywordDTOFromMap(String keyword, Date createdAt, boolean byMonth, Map<Integer, Map<Integer, Map<String, KeywordDTO>>> map) {
 		LocalDate date = createdAt.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
@@ -143,11 +85,10 @@ public class ArticlesTweetsBatch implements Runnable{
 		mapDayOf.put(keyword.getKeyword(), keyword);
 	}
 	
-	public void calculateTweetsStats() {
+	public static void calculateTweetsStats() {
 		MongoStreaming.deleteNullTweets();
-		Set<String> keywords = MongoStreaming.getArticlesKeywords();
+		Set<String> keywords = MongoConnector.getArticlesKeywords();
 		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> allStatics = new HashMap<>();
-		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> monthStatics = new HashMap<>();
 		List<String> tweetsToDelete = new ArrayList<String>();
 		Long tweetsCount = MongoStreaming.getCountTweets();
 		Long tweetNum = 0L;
@@ -177,9 +118,6 @@ public class ArticlesTweetsBatch implements Runnable{
 							KeywordDTO valor = getKeywordDTOFromMap(keyword, createdAt, false, allStatics);
 							valor.setStatistic(valor.getStatistic() + 1D);
 							setKeywordDTOToMap(valor, false, allStatics);
-							valor = getKeywordDTOFromMap(keyword, createdAt, true, monthStatics);
-							valor.setStatistic(valor.getStatistic() + 1D);
-							setKeywordDTOToMap(valor, true, monthStatics);
 						}
 					}
 				} catch (Exception e) {
@@ -209,6 +147,30 @@ public class ArticlesTweetsBatch implements Runnable{
 				});
 			});
 		});
+	}
+	
+	public static void calculateMonthTweetsStats() {
+		Map<Integer, Map<Integer, Map<String, KeywordDTO>>> monthStatics = new HashMap<>();
+		Long index = 0L, count = 100L;
+		Iterable<Document> reports;
+		boolean findMore = true;
+		while (findMore) {
+			reports = MongoStreaming.getDailyReports(index, count);
+			for (Document doc:reports) {
+				index += 1;
+				if(doc != null) {
+					KeywordDTO report = Utils.convertJsonToKeywordDTO(doc.toJson());
+					KeywordDTO valor = getKeywordDTOFromMap(report.getKeyword(), report.getTime(), true, monthStatics);
+					valor.setStatistic(valor.getStatistic() + report.getStatistic());
+					setKeywordDTOToMap(valor, true, monthStatics);
+				}
+			}
+			if(index >= count) {
+				count = index + 100L;
+			} else {
+				findMore = false;
+			}
+		}
 		monthStatics.forEach((year , mapDays) -> {
 			mapDays.forEach((month, mapKeys) -> {
 				mapKeys.forEach((keyword, dto) -> {
@@ -225,8 +187,8 @@ public class ArticlesTweetsBatch implements Runnable{
 	}
 	
 	@SuppressWarnings("unchecked")
-	public void calculateArticlesRatings(){
-		Iterable<Document> documents = MongoStreaming.getAllArticles();
+	public static void calculateArticlesRatings(){
+		Iterable<Document> documents = MongoConnector.getAllArticles();
 		List<Document> articles = new ArrayList<>();
 		List<ArticleRatingDTO> ratings = new ArrayList<>();
 		for(Document article:documents) {
