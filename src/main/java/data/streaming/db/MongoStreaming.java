@@ -92,8 +92,19 @@ public class MongoStreaming {
 		doc.append("report_day", dayOf);
 		KeywordDTO existing = getKeywordReport(keyword.getKeyword(), keyword.getTime(), byMonth);
 		if(existing != null) {
-			Double score = keyword.getStatistic() + existing.getStatistic();
-			doc.put("statistic", score);
+			Double score;
+			if (!byMonth) {
+				score = keyword.getStatistic() + existing.getStatistic();
+				doc.put("statistic", score);
+			} else {
+				if(keyword.getStatistic() > existing.getStatistic()) {
+					score = keyword.getStatistic();
+					doc.put("statistic", score);
+				} else {
+					System.out.println("Alert!, New Monthly report is lesser than old: " + dayOf + "/" + year + " byMonth: " + byMonth + ". Old: " + existing.getStatistic() + " New: " + keyword.getStatistic());
+					return true;
+				}
+			}
 			System.out.println("Updating existing report on date: " + dayOf + "/" + year + " byMonth: " + byMonth + ". Old: " + existing.getStatistic() + " New: " + score);
 			reportsCollection.replaceOne(getFilterForKeyword(keyword, byMonth), doc);
 		} else {
@@ -278,7 +289,12 @@ public class MongoStreaming {
 	private static Bson getFilterForKeyword(KeywordDTO key, boolean byMonth) {
 		LocalDate date = key.getTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
 		Integer year = date.getYear();
-		Integer dayOf = date.getDayOfYear();
+		Integer dayOf;
+		if(!byMonth) {
+			dayOf = date.getDayOfYear();
+		} else {
+			dayOf = date.getMonthValue();
+		}
 		Bson filterKey = Filters.eq("keyword", key.getKeyword());
 		Bson filterType;
 		if(byMonth) {
